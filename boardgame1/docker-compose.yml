@@ -1,0 +1,16 @@
+version: '2'
+services:
+  server:
+    build: ./server
+    command: go run
+    volumes:
+      - ./server:/go/src/app
+    ports:
+      - '8080:3000'
+  client:
+    build: ./client
+    command: npm start
+    volumes:
+      - ./client:/usr/src/app
+    ports:
+      - '9000:3000'
