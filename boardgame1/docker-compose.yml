@@ -1,8 +1,8 @@
-version: '2'
+version: '3'
 services:
   server:
     build: ./server
-    command: go run
+    command: go run *.go
     volumes:
       - ./server:/go/src/app
     ports:
