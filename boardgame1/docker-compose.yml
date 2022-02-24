@@ -13,4 +13,4 @@ services:
     volumes:
       - ./client:/usr/src/app
     ports:
-      - '9000:3000'
+      - '4000:3000'
