@@ -1,24 +1,45 @@
-import React from 'react';
-import logo from './logo.svg';
-import './App.css';
+import React from "react";
+import Socket from "./socket";
+import SendForm from "./SendForm";
 
-function App() {
+const App = () => {
+  const [logs, setLogs] = React.useState(new Array<string>());
+  const [socket] = React.useState(new Socket());
+
+  React.useEffect(() => {
+    socket.on("connect", onConnect);
+    socket.on("disconnect", onDisconnect);
+    socket.on("message", receiveMessage);
+
+    return () => {
+      socket.close();
+    }
+  }, [])
+
+  const onConnect = () => {
+    logs.push("onConnect.")
+    setLogs([...logs])
+  };
+
+  const onDisconnect = () => {
+    logs.push("onDisconnect.")
+    setLogs([...logs])
+  };
+
+  const receiveMessage = (e: {data: string}) => {
+    logs.push(e.data)
+    setLogs([...logs])
+  }
+
   return (
-    <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.tsx</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
+    <div>
+      <h1>Go×React Chatサンプル</h1>
+      <SendForm socket={socket} />
+      <ul>
+        {logs.map((log: string, i: number) => {
+          return <li key={i}>{log}</li>
+        })}
+      </ul>
     </div>
   );
 }
