@@ -1,43 +1,79 @@
 package main
 
 import (
-    "fmt"
     "log"
     "net/http"
 
-    "golang.org/x/net/websocket"
+    "github.com/gorilla/websocket"
 )
 
-func main() {
-    http.Handle("/ws", websocket.Handler(msgHandler))
+var clients = make(map[*websocket.Conn]bool) // 接続されるクライアント
+var broadcast = make(chan Message)           // メッセージブロードキャストチャネル
 
+// アップグレーダ
+var upgrader = websocket.Upgrader{}
+
+// メッセージ用構造体
+type Message struct {
+    Email    string `json:"email"`
+    Username string `json:"username"`
+    Message  string `json:"message"`
+}
+
+func main() {
+    // ファイルサーバーを立ち上げる
+    fs := http.FileServer(http.Dir("./public"))
+    http.Handle("/", fs)
+    // websockerへのルーティングを紐づけ
+    http.HandleFunc("/ws", handleConnections)
+    go handleMessages()
+    // サーバーをlocalhostのポート8000で立ち上げる
+    log.Println("http server started on :8080")
     err := http.ListenAndServe(":8080", nil)
+    // エラーがあった場合ロギングする
     if err != nil {
-        log.Fatal(err)
+        log.Fatal("ListenAndServe: ", err)
     }
 }
 
-func msgHandler(ws *websocket.Conn) {
+func handleConnections(w http.ResponseWriter, r *http.Request) {
+    // 送られてきたGETリクエストをwebsocketにアップグレード
+    ws, err := upgrader.Upgrade(w, r, nil)
+    if err != nil {
+        log.Fatal(err)
+    }
+    // 関数が終わった際に必ずwebsocketnのコネクションを閉じる
     defer ws.Close()
 
-    // 初回のメッセージを送信
-    err := websocket.Message.Send(ws, "こんにちは！ :)")
-    if err != nil {
-        log.Fatalln(err)
-    }
+    // クライアントを新しく登録
+    clients[ws] = true
 
     for {
-        // メッセージを受信する
-        msg := ""
-        err = websocket.Message.Receive(ws, &msg)
+        var msg Message
+        // 新しいメッセージをJSONとして読み込みMessageオブジェクトにマッピングする
+        err := ws.ReadJSON(&msg)
         if err != nil {
-            log.Fatalln(err)
+            log.Printf("error: %v", err)
+            delete(clients, ws)
+            break
         }
+        // 新しく受信されたメッセージをブロードキャストチャネルに送る
+        broadcast <- msg
+    }
+}
 
-        // メッセージを返信する
-        err := websocket.Message.Send(ws, fmt.Sprintf(`%q というメッセージを受け取りました。`, msg))
-        if err != nil {
-            log.Fatalln(err)
+func handleMessages() {
+    for {
+        // ブロードキャストチャネルから次のメッセージを受け取る
+        msg := <-broadcast
+        // 現在接続しているクライアント全てにメッセージを送信する
+        for client := range clients {
+            err := client.WriteJSON(msg)
+            if err != nil {
+                log.Printf("error: %v", err)
+                client.Close()
+                delete(clients, client)
+            }
         }
     }
 }
